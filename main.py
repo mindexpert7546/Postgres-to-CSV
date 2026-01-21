@@ -6,45 +6,45 @@ import uuid
 from pathlib import Path
 from typing import Any, List, Tuple
 
-import psycopg2
+import pyodbc
 from dotenv import load_dotenv
 from openpyxl import load_workbook
 
 
-# ================= PostgreSQL Connection =================
+# ================= OpenEdge Connection =================
 
-class PostgreSQLConnection:
+class OpenEdgeConnection:
     def __init__(self) -> None:
         self._load_env()
-        self.params = {
-            "database": os.getenv("POSTGRES_DB"),
-            "user": os.getenv("POSTGRES_USER"),
-            "password": os.getenv("POSTGRES_PASSWORD"),
-            "host": os.getenv("POSTGRES_HOST"),
-            "port": os.getenv("POSTGRES_PORT"),
-        }
+        self.conn_str = (
+            f"DSN={os.getenv('OE_DSN')};"
+            f"UID={os.getenv('OE_USER')};"
+            f"PWD={os.getenv('OE_PASSWORD')};"
+        )
 
     def _load_env(self) -> None:
         base_dir = Path(__file__).resolve().parent
-        load_dotenv(base_dir / ".env")
+        load_dotenv(base_dir / "config.env")
 
     def connect(self):
-        return psycopg2.connect(**self.params)
+        return pyodbc.connect(self.conn_str)
 
 
 # ================= Data Processor =================
 
 class DataProcessor:
-    def __init__(self, connection: PostgreSQLConnection) -> None:
+    def __init__(self, connection: OpenEdgeConnection) -> None:
         self.connection = connection
         os.makedirs("images", exist_ok=True)
         os.makedirs("output", exist_ok=True)
 
     def fetch_data(self, query: str) -> Tuple[List[Tuple], List[str]]:
         with self.connection.connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchall(), [col[0] for col in cur.description]
+            cur = conn.cursor()
+            cur.execute(query)
+            rows = cur.fetchall()
+            columns = [col[0] for col in cur.description]
+            return rows, columns
 
     def export_to_csv(self, csv_name: str, columns: List[str], rows: List[Tuple]) -> None:
         csv_path = Path("output") / f"{csv_name}.csv"
@@ -60,23 +60,6 @@ class DataProcessor:
                 ])
 
         print(f"✅ CSV created: {csv_path}")
-
-    def extract_table_names(self, query: str) -> str:
-        tables = re.findall(
-            r"(?:FROM|JOIN)\s+([a-zA-Z0-9_.\"]+)",
-            query,
-            flags=re.IGNORECASE
-        )
-
-        clean_tables = {
-            t.replace('"', "").split(".")[-1]
-            for t in tables
-        }
-
-        if not clean_tables:
-            return "result"
-
-        return "_".join(sorted(clean_tables))
 
     def process_cell(self, value: Any, column_name: str) -> str:
         if value is None:
@@ -135,39 +118,16 @@ def get_excel_file() -> Path:
     ]
 
     if not excel_files:
-        raise FileNotFoundError(
-            "❌ No valid Excel file found.\n"
-            "✔ Place the Excel file next to main.py\n"
-            "✔ Close Excel before running the script"
-        )
-
-    if len(excel_files) > 1:
-        print("⚠ Multiple Excel files found. Using:", excel_files[0].name)
+        raise FileNotFoundError("❌ No Excel file found next to main.py")
 
     return excel_files[0]
 
-def get_unique_csv_name(base_name: str) -> str:
-    """
-    Returns a unique CSV name by adding _1, _2, etc. if needed
-    """
-    output_dir = Path("output")
-    csv_path = output_dir / f"{base_name}.csv"
-
-    if not csv_path.exists():
-        return base_name
-
-    counter = 1
-    while True:
-        new_name = f"{base_name}_{counter}"
-        if not (output_dir / f"{new_name}.csv").exists():
-            return new_name
-        counter += 1
 
 # ================= MAIN =================
 
 def main():
-    postgres = PostgreSQLConnection()
-    processor = DataProcessor(postgres)
+    db = OpenEdgeConnection()
+    processor = DataProcessor(db)
 
     excel_file = get_excel_file()
     print(f"📄 Using Excel file: {excel_file.name}")
