@@ -177,14 +177,22 @@ def main():
 
     for row in range(2, sheet.max_row + 1):
         query = sheet[f"C{row}"].value
-        csv_cell = sheet[f"D{row}"]
+        csv_name_cell = sheet[f"D{row}"]   # CSV Name
+        status_cell = sheet[f"E{row}"]     # Status
 
-        if not query or csv_cell.value:
+
+        if not query:
             continue
 
-        # csv_name = processor.extract_table_names(query)
-        base_csv_name = processor.extract_table_names(query)
-        csv_name = get_unique_csv_name(base_csv_name)
+        if not csv_name_cell.value:
+            status_cell.value = "ERROR: CSV name missing"
+            continue
+
+        if status_cell.value:
+            continue   # already processed
+
+
+        csv_name = csv_name_cell.value.replace(".csv", "").strip()
 
 
         print(f"▶ Processing row {row}: {csv_name}")
@@ -192,9 +200,9 @@ def main():
         try:
             data, columns = processor.fetch_data(query)
             processor.export_to_csv(csv_name, columns, data)
-            csv_cell.value = f"{csv_name}.csv"
+            status_cell.value = "Done"
         except Exception as e:
-            csv_cell.value = f"ERROR: {str(e)}"
+            status_cell.value = f"ERROR: {str(e)}"
 
     wb.save(excel_file)
     print("🎯 Excel updated successfully")
