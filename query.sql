@@ -1,0 +1,1 @@
+SELECT company_name, reg_id, company_address FROM public."Company";
