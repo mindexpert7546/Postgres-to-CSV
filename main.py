@@ -2,11 +2,13 @@ import base64
 import csv
 import os
 import re
+import uuid
 from pathlib import Path
 from typing import Any, List, Tuple
 
 import psycopg2
 from dotenv import load_dotenv
+from openpyxl import load_workbook
 
 
 # ================= PostgreSQL Connection =================
@@ -38,38 +40,16 @@ class DataProcessor:
         os.makedirs("images", exist_ok=True)
         os.makedirs("output", exist_ok=True)
 
-    # ---------- Read SQL File ----------
-    def read_query(self, sql_file: str) -> str:
-        with open(sql_file, "r", encoding="utf-8") as f:
-            return f.read()
-
-    # ---------- Extract Table Names (CSV Naming) ----------
-    def extract_table_names(self, query: str) -> str:
-        tables = re.findall(
-            r"(?:FROM|JOIN)\s+([a-zA-Z0-9_.\"]+)",
-            query,
-            re.IGNORECASE
-        )
-
-        clean_tables = {
-            t.replace('"', "").split(".")[-1]
-            for t in tables
-        }
-
-        return "_".join(sorted(clean_tables)) if clean_tables else "result"
-
-    # ---------- Execute Query ----------
     def fetch_data(self, query: str) -> Tuple[List[Tuple], List[str]]:
         with self.connection.connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(query)
                 return cur.fetchall(), [col[0] for col in cur.description]
 
-    # ---------- Export CSV ----------
-    def export_to_csv(self, table_name: str, columns: List[str], rows: List[Tuple]) -> None:
-        csv_file = f"output/{table_name}.csv"
+    def export_to_csv(self, csv_name: str, columns: List[str], rows: List[Tuple]) -> None:
+        csv_path = Path("output") / f"{csv_name}.csv"
 
-        with open(csv_file, "w", newline="", encoding="utf-8") as f:
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(columns)
 
@@ -79,62 +59,126 @@ class DataProcessor:
                     for idx, value in enumerate(row)
                 ])
 
-        print(f"✅ CSV created: {csv_file}")
+        print(f"✅ CSV created: {csv_path}")
 
-    # ---------- Process Each Cell (SAFE) ----------
+    def extract_table_names(self, query: str) -> str:
+        tables = re.findall(
+            r"(?:FROM|JOIN)\s+([a-zA-Z0-9_.\"]+)",
+            query,
+            flags=re.IGNORECASE
+        )
+
+        clean_tables = {
+            t.replace('"', "").split(".")[-1]
+            for t in tables
+        }
+
+        if not clean_tables:
+            return "result"
+
+        return "_".join(sorted(clean_tables))
+
     def process_cell(self, value: Any, column_name: str) -> str:
         if value is None:
             return ""
 
-        # BYTEA / BLOB
         if isinstance(value, (bytes, bytearray)):
             if self._is_real_image(value):
                 return self._save_image(value, column_name)
-            return value.hex()  # safe fallback
+            return value.hex()
 
-        # STRING (possible base64 image)
-        if isinstance(value, str):
-            if value.startswith("data:image"):
-                try:
-                    img_bytes = base64.b64decode(value.split(",", 1)[1])
-                    if self._is_real_image(img_bytes):
-                        return self._save_image(img_bytes, column_name)
-                except Exception:
-                    pass
-            return value  # normal text
+        if isinstance(value, str) and value.startswith("data:image"):
+            try:
+                img_bytes = base64.b64decode(value.split(",", 1)[1])
+                if self._is_real_image(img_bytes):
+                    return self._save_image(img_bytes, column_name)
+            except Exception:
+                pass
 
         return str(value)
 
-    # ---------- REAL Image Validation ----------
     def _is_real_image(self, img_bytes: bytes) -> bool:
         return (
-            img_bytes.startswith(b"\x89PNG") or       # PNG
-            img_bytes.startswith(b"\xff\xd8\xff") or  # JPG/JPEG
-            img_bytes.startswith(b"RIFF")             # WEBP
+            img_bytes.startswith(b"\x89PNG") or
+            img_bytes.startswith(b"\xff\xd8\xff") or
+            img_bytes.startswith(b"RIFF")
         )
 
-    # ---------- Save Image ----------
+    def _get_image_extension(self, img_bytes: bytes) -> str:
+        if img_bytes.startswith(b"\x89PNG"):
+            return "png"
+        if img_bytes.startswith(b"\xff\xd8\xff"):
+            return "jpg"
+        if img_bytes.startswith(b"RIFF"):
+            return "webp"
+        return "bin"
+
     def _save_image(self, img_bytes: bytes, column_name: str) -> str:
-        filename = f"images/{column_name}_{len(os.listdir('images')) + 1}.png"
-        with open(filename, "wb") as f:
+        ext = self._get_image_extension(img_bytes)
+        filename = f"{column_name}_{uuid.uuid4().hex}.{ext}"
+        path = Path("images") / filename
+
+        with open(path, "wb") as f:
             f.write(img_bytes)
-        return filename
+
+        return str(path)
 
 
-# ================= Main =================
+# ================= Excel Helper =================
+
+def get_excel_file() -> Path:
+    base_dir = Path(__file__).resolve().parent
+
+    excel_files = [
+        f for f in base_dir.glob("*.xlsx")
+        if not f.name.startswith("~$")
+    ]
+
+    if not excel_files:
+        raise FileNotFoundError(
+            "❌ No valid Excel file found.\n"
+            "✔ Place the Excel file next to main.py\n"
+            "✔ Close Excel before running the script"
+        )
+
+    if len(excel_files) > 1:
+        print("⚠ Multiple Excel files found. Using:", excel_files[0].name)
+
+    return excel_files[0]
+
+
+# ================= MAIN =================
 
 def main():
     postgres = PostgreSQLConnection()
     processor = DataProcessor(postgres)
 
-    # Read large query from file
-    query = processor.read_query("query.sql")
+    excel_file = get_excel_file()
+    print(f"📄 Using Excel file: {excel_file.name}")
 
-    # CSV file name from table(s)
-    table_name = processor.extract_table_names(query)
+    wb = load_workbook(excel_file)
+    sheet = wb.active
 
-    data, columns = processor.fetch_data(query)
-    processor.export_to_csv(table_name, columns, data)
+    for row in range(2, sheet.max_row + 1):
+        query = sheet[f"C{row}"].value
+        csv_cell = sheet[f"D{row}"]
+
+        if not query or csv_cell.value:
+            continue
+
+        csv_name = processor.extract_table_names(query)
+
+        print(f"▶ Processing row {row}: {csv_name}")
+
+        try:
+            data, columns = processor.fetch_data(query)
+            processor.export_to_csv(csv_name, columns, data)
+            csv_cell.value = f"{csv_name}.csv"
+        except Exception as e:
+            csv_cell.value = f"ERROR: {str(e)}"
+
+    wb.save(excel_file)
+    print("🎯 Excel updated successfully")
 
 
 if __name__ == "__main__":
