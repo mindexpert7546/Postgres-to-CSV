@@ -14,8 +14,8 @@ This Python script connects to a PostgreSQL database, fetches data from a specif
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/yourusername/your-repository.git
-    cd your-repository
+    git clone https://github.com/mindexpert7546/Postgres-to-CSV.git
+    cd Postgres-to-CSV
     ```
 
 2. Install dependencies:
@@ -42,7 +42,7 @@ This Python script connects to a PostgreSQL database, fetches data from a specif
     python main.py
     ```
 
-    This will connect to the PostgreSQL database, fetch data from the specified table, and export it to a CSV file (`output.csv`) in the project root. Image files will be saved in the `images` directory.
+    This will connect to the PostgreSQL database, fetch data from the specified table, and export it to a CSV file (`output/tableName.csv`) in the project root. Image files will be saved in the `images` directory.
 
 2. Customize SQL Query (Optional): Via QueryDetails.xlx
 
