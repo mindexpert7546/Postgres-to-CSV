@@ -146,6 +146,22 @@ def get_excel_file() -> Path:
 
     return excel_files[0]
 
+def get_unique_csv_name(base_name: str) -> str:
+    """
+    Returns a unique CSV name by adding _1, _2, etc. if needed
+    """
+    output_dir = Path("output")
+    csv_path = output_dir / f"{base_name}.csv"
+
+    if not csv_path.exists():
+        return base_name
+
+    counter = 1
+    while True:
+        new_name = f"{base_name}_{counter}"
+        if not (output_dir / f"{new_name}.csv").exists():
+            return new_name
+        counter += 1
 
 # ================= MAIN =================
 
@@ -166,7 +182,10 @@ def main():
         if not query or csv_cell.value:
             continue
 
-        csv_name = processor.extract_table_names(query)
+        # csv_name = processor.extract_table_names(query)
+        base_csv_name = processor.extract_table_names(query)
+        csv_name = get_unique_csv_name(base_csv_name)
+
 
         print(f"▶ Processing row {row}: {csv_name}")
 
