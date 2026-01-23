@@ -27,11 +27,10 @@ This Python script connects to a PostgreSQL database, fetches data from a specif
 3. Rename the project file `.env.example` to `.env` and set the following environment variables:
 
     ```env
-    POSTGRES_USER=postgres
-    POSTGRES_PASSWORD=password
-    POSTGRES_DB=alexdb
-    POSTGRES_HOST=localhost
-    POSTGRES_PORT=5432
+    OE_DSN=OpenEdgeDSN
+    OE_USER=dbuser
+    OE_PASSWORD=dbpassword
+
     ```
 
 ## Usage
