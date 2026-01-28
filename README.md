@@ -44,8 +44,14 @@ This Python script connects to a PostgreSQL database, fetches data from a specif
 
 # Alternate Approach : 
 ### 1. Install Python : https://www.python.org/downloads/
-### 2. check version : py --version
-### 3. py -m pip install -r requirements.txt
+### 2. check version : 
+```
+ py --version
+```
+### 3. Download requirements
+```
+  py -m pip install -r requirements.txt
+```
 
 ### 4. Download the Source Code : https://github.com/mindexpert7546/Postgres-to-CSV
 ### 5. Rename the project file .env.example to config.env and set the following environment variables
@@ -57,7 +63,10 @@ This Python script connects to a PostgreSQL database, fetches data from a specif
 
 ### 6. Fill the QueryDetails.xlsx
 
-### 7. Run the script by : py main.py
+### 7. Run the script by : 
+ ```
+py main.py
+```
 
 ### 8. Output : You can see the output in output folder
 
