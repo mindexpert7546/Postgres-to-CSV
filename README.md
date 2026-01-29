@@ -42,8 +42,40 @@ This Python script connects to a PostgreSQL database, fetches data from a specif
     python main.py
     ```
 
-    This will connect to the PostgreSQL database, fetch data from the specified table, and export it to a CSV file (`output/tableName.csv`) in the project root. Image files will be saved in the `images` directory.
+# Alternate Approach : 
+### 1. Install Python : https://www.python.org/downloads/
+### 2. check version : 
+```
+ py --version
+```
+### 3. Download requirements
+```
+  py -m pip install -r requirements.txt
+```
 
-2. Customize SQL Query (Optional): Via QueryDetails.xlx
+### 4. Download the Source Code : https://github.com/mindexpert7546/Postgres-to-CSV
+### 5. Rename the project file .env.example to config.env and set the following environment variables
+```
+	OE_DSN=OpenEdgeDSN
+	OE_USER=dbuser
+	OE_PASSWORD=dbpassword
+```
 
-3. View the Output: In output folder followed by csv name in excel
+### 6. Fill the QueryDetails.xlsx
+
+### 7. Run the script by : 
+ ```
+py main.py
+```
+
+### 8. Output : You can see the output in output folder
+
+# How to verify the query via GUI : 
+
+### 1. Download dbeaver : https://dbeaver.io/download/
+### 2. Connect the DB and write the query 
+#### This will connect to the PostgreSQL database, fetch data from the specified table, and export it to a CSV file (`output/tableName.csv`) in the project root. Image files will be saved in the `images` directory.
+
+### 2. Customize SQL Query (Optional): Via QueryDetails.xlx
+
+### 3. View the Output: In output folder followed by csv name in excel
