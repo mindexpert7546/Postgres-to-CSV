@@ -1,10 +1,9 @@
 import base64
 import csv
 import os
-import re
 import uuid
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any
 
 import pyodbc
 from dotenv import load_dotenv
@@ -38,28 +37,35 @@ class DataProcessor:
         os.makedirs("images", exist_ok=True)
         os.makedirs("output", exist_ok=True)
 
-    def fetch_data(self, query: str) -> Tuple[List[Tuple], List[str]]:
+    # -------- STREAMING CSV EXPORT (CORE FIX) --------
+
+    def export_query_to_csv(self, query: str, csv_name: str) -> None:
+        csv_path = Path("output") / f"{csv_name}.csv"
+
         with self.connection.connect() as conn:
             cur = conn.cursor()
             cur.execute(query)
-            rows = cur.fetchall()
+
             columns = [col[0] for col in cur.description]
-            return rows, columns
 
-    def export_to_csv(self, csv_name: str, columns: List[str], rows: List[Tuple]) -> None:
-        csv_path = Path("output") / f"{csv_name}.csv"
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(columns)
 
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(columns)
+                while True:
+                    rows = cur.fetchmany(5000)  # batch size
+                    if not rows:
+                        break
 
-            for row in rows:
-                writer.writerow([
-                    self.process_cell(value, columns[idx])
-                    for idx, value in enumerate(row)
-                ])
+                    for row in rows:
+                        writer.writerow([
+                            self.process_cell(value, columns[idx])
+                            for idx, value in enumerate(row)
+                        ])
 
-        print(f"✅ CSV created: {csv_path}")
+        print(f"✅ CSV created (streamed): {csv_path}")
+
+    # -------- CELL PROCESSING --------
 
     def process_cell(self, value: Any, column_name: str) -> str:
         if value is None:
@@ -118,7 +124,11 @@ def get_excel_file() -> Path:
     ]
 
     if not excel_files:
-        raise FileNotFoundError("❌ No Excel file found next to main.py")
+        raise FileNotFoundError(
+            "❌ No Excel file found.\n"
+            "✔ Place Excel next to this script\n"
+            "✔ Close Excel before running"
+        )
 
     return excel_files[0]
 
@@ -137,9 +147,8 @@ def main():
 
     for row in range(2, sheet.max_row + 1):
         query = sheet[f"C{row}"].value
-        csv_name_cell = sheet[f"D{row}"]   # CSV Name
-        status_cell = sheet[f"E{row}"]     # Status
-
+        csv_name_cell = sheet[f"D{row}"]
+        status_cell = sheet[f"E{row}"]
 
         if not query:
             continue
@@ -149,22 +158,25 @@ def main():
             continue
 
         if status_cell.value:
-            continue   # already processed
-
+            continue  # already processed
 
         csv_name = csv_name_cell.value.replace(".csv", "").strip()
-
 
         print(f"▶ Processing row {row}: {csv_name}")
 
         try:
-            data, columns = processor.fetch_data(query)
-            processor.export_to_csv(csv_name, columns, data)
+            status_cell.value = "Processing..."
+            wb.save(excel_file)
+
+            processor.export_query_to_csv(query, csv_name)
+
             status_cell.value = "Done"
+
         except Exception as e:
             status_cell.value = f"ERROR: {str(e)}"
 
-    wb.save(excel_file)
+        wb.save(excel_file)
+
     print("🎯 Excel updated successfully")
 
 
